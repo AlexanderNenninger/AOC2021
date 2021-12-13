@@ -1,4 +1,5 @@
 #[allow(unused_imports)]
+use std::fmt;
 
 pub const INPUT: &str = "input/day10.txt";
 
@@ -15,9 +16,20 @@ enum Parenthesis {
     Tri,
 }
 
-struct DelimStack(Vec<Parenthesis>);
+impl fmt::Display for Parenthesis {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Round => write!(f, "{}", ")"),
+            Self::Square => write!(f, "{}", "]"),
+            Self::Curly => write!(f, "{}", "}"),
+            Self::Tri => write!(f, "{}", ">"),
+        }
+    }
+}
 
-impl DelimStack {
+struct ParStack(Vec<Parenthesis>);
+
+impl ParStack {
     fn new() -> Self {
         Self(vec![])
     }
@@ -66,16 +78,33 @@ impl DelimStack {
             _ => return Err(StackError::Parse),
         }
     }
+
+    fn complete(mut self) -> usize {
+        let mut pts = 0;
+        while self.0.len() > 0 {
+            pts *= 5;
+
+            let par = self.0.pop().unwrap();
+            pts += match par {
+                Parenthesis::Round => 1,
+                Parenthesis::Square => 2,
+                Parenthesis::Curly => 3,
+                Parenthesis::Tri => 4,
+            };
+        }
+        pts
+    }
 }
 
 fn check_line(line: &str) -> usize {
-    let mut stack = DelimStack::new();
+    let mut stack = ParStack::new();
     for c in line.chars() {
         return match stack.check(&c) {
             Ok(_) => continue,
-            Err(StackError::Empty) => continue,
-            Err(StackError::Parse) => continue,
+            Err(StackError::Empty) => continue, // We ran out of characters
+            Err(StackError::Parse) => continue, // Unknown character
             Err(StackError::Mismatch(c)) => match c {
+                // Corrupted line!!
                 ')' => 3,
                 ']' => 57,
                 '}' => 1197,
@@ -87,7 +116,20 @@ fn check_line(line: &str) -> usize {
     return 0;
 }
 
-pub fn solve_1(data: String) -> usize {
+fn complete_line(line: &str) -> Option<usize> {
+    let mut stack = ParStack::new();
+    for c in line.chars() {
+        return match stack.check(&c) {
+            Ok(_) => continue,                    // Next char
+            Err(StackError::Empty) => None,       // We ran out of characters
+            Err(StackError::Parse) => continue,   // Unknown character
+            Err(StackError::Mismatch(_)) => None, // Corrupt line
+        };
+    }
+    return Some(stack.complete());
+}
+
+pub fn solve_1(data: &String) -> usize {
     let mut pts = 0;
     for line in data.lines() {
         pts += check_line(line);
@@ -95,16 +137,40 @@ pub fn solve_1(data: String) -> usize {
     pts
 }
 
+pub fn solve_2(data: &String) -> usize {
+    let mut pts = vec![];
+    for line in data.lines() {
+        match complete_line(line) {
+            Some(res) => pts.push(res),
+            None => continue,
+        };
+    }
+    pts.sort();
+    pts[pts.len() / 2]
+}
+
 mod tests {
     #[allow(unused)]
     pub const INPUT_TEST: &str = "input/day10_test.txt";
+
     #[allow(unused_imports)]
-    use super::solve_1;
+    use super::{solve_1, solve_2};
+
     #[test]
-    fn name() {
+    fn test_1() {
         use std::fs;
         let data = fs::read_to_string(INPUT_TEST).unwrap();
-        let res = solve_1(data);
+        let res = solve_1(&data);
+        println!("{}", &res);
+        assert_eq!(res, 26397)
+    }
+
+    #[test]
+    fn test_2() {
+        use std::fs;
+        let data = fs::read_to_string(INPUT_TEST).unwrap();
+        let res = solve_2(&data);
         println!("{}", res);
+        assert_eq!(288957, res)
     }
 }

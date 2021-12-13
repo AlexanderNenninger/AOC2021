@@ -7,6 +7,3 @@ edition = "2018"
 
 [dependencies]
 arraymap = "0.1.1"
-
-strum = { version = "0.23", features = ["derive"] }
-strum_macros = "0.23"
