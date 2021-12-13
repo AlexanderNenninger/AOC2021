@@ -1,12 +1,11 @@
-mod day10;
+mod day13;
 
 use std::fs;
 
 fn main() {
-    let data = fs::read_to_string(day10::INPUT).unwrap();
-    let result_1 = day10::solve_1(&data);
+    let data = fs::read_to_string(day13::INPUT).unwrap();
+    let result_1 = day13::solve_1(&data, Some(1));
     println!("{}", result_1);
 
-    let result_2 = day10::solve_2(&data);
-    println!("{}", result_2);
+    day13::solve_2(&data);
 }
