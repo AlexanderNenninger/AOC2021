@@ -1,16 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, LinkedList};
 use std::str;
 
 pub const INPUT: &str = "input/day14.txt";
 
-type Polymer = Vec<char>;
+type Polymer = LinkedList<char>;
 type Insertions = HashMap<(char, char), char>;
 
 trait Polymerize {
     fn polymerize(self, insertions: &Insertions) -> Self;
-
-    /// Insert a character 'base' at idx.
-    fn insert(self, idx: usize, base: char) -> Self;
 }
 
 impl Polymerize for Polymer {
@@ -21,41 +18,31 @@ impl Polymerize for Polymer {
         }
 
         // Empty Data
-        if insertions.len() == 0 {
+        if insertions.is_empty() {
             return self;
         }
 
-        let mut i = 0;
+        let mut cur = self.cursor_front_mut();
         loop {
-            let fst = match self.get(i) {
-                Some(val) => val,
+            let fst = match cur.as_cursor().current() {
+                Some(val) => *val,
                 None => unreachable!(),
             };
-
-            match self.get(i + 1) {
-                Some(snd) => match insertions.get(&(*fst, *snd)) {
+            match cur.peek_next() {
+                Some(snd) => match insertions.get(&(fst, *snd)) {
                     Some(base) => {
-                        i += 1;
-                        self = self.insert(i, *base);
+                        cur.insert_after(*base);
+                        cur.move_next();
                     }
                     None => {
-                        i += 1;
+                        cur.move_next();
                         continue;
                     }
                 },
                 None => return self,
-            };
-            i += 1;
+            }
+            cur.move_next();
         }
-    }
-
-    fn insert(self, idx: usize, base: char) -> Self {
-        self[0..idx]
-            .iter()
-            .chain(vec![&base])
-            .chain(&self[idx..])
-            .map(|x| *x)
-            .collect()
     }
 }
 
@@ -67,11 +54,11 @@ trait ReadStr: Sized {
 impl ReadStr for Polymer {
     type Err = ();
     fn read_str(s: &str) -> Result<Self, Self::Err> {
-        let chars = s.chars().collect::<Vec<char>>();
+        let chars = s.chars().collect::<LinkedList<char>>();
         match chars.iter().all(|c: &char| c.is_ascii_uppercase()) {
-            true => return Ok(chars),
-            false => return Err(()),
-        };
+            true => Ok(chars),
+            false => Err(()),
+        }
     }
 }
 
@@ -166,14 +153,6 @@ pub mod tests {
     use std::fs;
 
     #[test]
-    fn insert() {
-        let mut input = vec!['a', 'b', 'c'];
-        input = input.insert(1, 'z');
-
-        assert_eq!(input, vec!['a', 'z', 'b', 'c'])
-    }
-
-    #[test]
     fn polymerize() {
         let mut insertions: Insertions = HashMap::new();
         insertions.insert(('a', 'a'), 'a');
@@ -181,14 +160,14 @@ pub mod tests {
         let mut polymer: Polymer = "aabcd".chars().collect();
         polymer = polymer.polymerize(&insertions);
 
-        assert_eq!(polymer, "aaabcd".chars().collect::<Vec<char>>());
+        assert_eq!(polymer, "aaabcd".chars().collect::<LinkedList<char>>());
     }
 
     #[test]
     fn polymer_read_str() {
         let s = "ABCX";
         let poly = Polymer::read_str(s);
-        assert_eq!(poly, Ok(s.chars().collect::<Vec<char>>()));
+        assert_eq!(poly, Ok(s.chars().collect::<LinkedList<char>>()));
 
         let s = "AB CX";
         let poly = Polymer::read_str(s);

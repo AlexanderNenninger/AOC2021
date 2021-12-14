@@ -1,3 +1,4 @@
+#![feature(linked_list_cursors)]
 mod day14;
 
 use std::fs;
