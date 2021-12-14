@@ -7,3 +7,6 @@ edition = "2018"
 
 [dependencies]
 arraymap = "0.1.1"
+
+[profile.release]
+debug = true
