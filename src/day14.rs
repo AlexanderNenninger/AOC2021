@@ -1,6 +1,8 @@
+use super::ReadStr;
 use std::collections::HashMap;
 use std::str;
 
+#[allow(unused)]
 pub const INPUT: &str = "input/day14.txt";
 
 type Polymer = Vec<char>;
@@ -21,7 +23,7 @@ impl Polymerize for Polymer {
         }
 
         // Empty Data
-        if insertions.len() == 0 {
+        if insertions.is_empty() {
             return self;
         }
 
@@ -54,14 +56,9 @@ impl Polymerize for Polymer {
             .iter()
             .chain(vec![&base])
             .chain(&self[idx..])
-            .map(|x| *x)
+            .copied()
             .collect()
     }
-}
-
-trait ReadStr: Sized {
-    type Err;
-    fn read_str(s: &str) -> Result<Self, Self::Err>;
 }
 
 impl ReadStr for Polymer {
@@ -69,9 +66,9 @@ impl ReadStr for Polymer {
     fn read_str(s: &str) -> Result<Self, Self::Err> {
         let chars = s.chars().collect::<Vec<char>>();
         match chars.iter().all(|c: &char| c.is_ascii_uppercase()) {
-            true => return Ok(chars),
-            false => return Err(()),
-        };
+            true => Ok(chars),
+            false => Err(()),
+        }
     }
 }
 
@@ -83,7 +80,7 @@ impl ReadStr for Insertions {
             if line.len() < 7 {
                 return Err(());
             }
-            let fst = line.chars().nth(0).unwrap();
+            let fst = line.chars().next().unwrap();
             let snd = line.chars().nth(1).unwrap();
             let base = line.chars().nth(6).unwrap();
             if !fst.is_ascii_uppercase() & !snd.is_ascii_uppercase() & !base.is_ascii_uppercase() {
@@ -198,7 +195,7 @@ pub mod tests {
     #[test]
     fn program_read_str() {
         let data = fs::read_to_string(INPUT_TEST).unwrap();
-        let program = Program::read_str(&data).expect("Program could not be parsed");
+        let _program = Program::read_str(&data).expect("Program could not be parsed");
     }
 
     #[test]
