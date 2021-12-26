@@ -1,7 +1,6 @@
 mod day14;
 mod lib;
 use lib::ReadStr;
-
 use std::fs;
 
 fn main() {
