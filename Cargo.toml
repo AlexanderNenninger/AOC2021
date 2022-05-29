@@ -8,6 +8,10 @@ edition = "2018"
 [dependencies]
 arraymap = "0.1.1"
 regex = "1.5.4"
+crossterm = "0.23.0"
+
+[workspace]
+members = ["runlength"]
 
 [profile.release]
 debug = true

@@ -1,4 +1,4 @@
-mod day07;
+mod day08;
 
 pub trait ReadStr: Sized {
     type Err;
