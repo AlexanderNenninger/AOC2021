@@ -1,7 +1,9 @@
+#![allow(dead_code, unused)]
+
 use std::fmt;
 use std::str;
 
-const valid_numbers: [u8; 10] = [
+const VALID_NUMBERS: [u8; 10] = [
     //76543210
     0b01110111u8, // 0
     0b00100010u8, // 1
@@ -36,7 +38,7 @@ impl Digit {
     }
 
     fn from_cfg(cfg: u8) -> Result<Self, ()> {
-        for (i, vn) in valid_numbers.iter().enumerate() {
+        for (i, vn) in VALID_NUMBERS.iter().enumerate() {
             if cfg == *vn {
                 return Ok(Digit(i as u8));
             }
@@ -170,7 +172,7 @@ impl fmt::Display for Problem {
 }
 
 fn is_valid(cfg: u8) -> bool {
-    for vn in valid_numbers {
+    for vn in VALID_NUMBERS {
         if cfg == vn {
             return true;
         }
@@ -190,7 +192,7 @@ mod tests {
 
     #[test]
     fn test_get() {
-        let bits = valid_numbers;
+        let bits = VALID_NUMBERS;
         for bit in bits {
             println!("{:1b}", get(bit, 3))
         }
