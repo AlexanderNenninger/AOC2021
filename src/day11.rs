@@ -187,4 +187,15 @@ mod tests {
 
         println!("{}", energies);
     }
+
+    /// Test 100 Steps
+    #[test]
+    fn test_example() {
+        let input = read_to_string(INPUT_TEST).unwrap();
+        let mut energies = Energies::from_str(&input).unwrap();
+        for _ in 0..100 {
+            energies.step();
+        }
+        
+    }
 }
