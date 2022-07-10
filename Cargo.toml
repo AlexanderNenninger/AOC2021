@@ -9,7 +9,7 @@ edition = "2018"
 arraymap = "0.1.1"
 regex = "1.5.4"
 crossterm = "0.23.0"
-
+itertools = "0.10.3"
 
 [profile.release]
 debug = true
