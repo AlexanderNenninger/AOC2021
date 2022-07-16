@@ -297,8 +297,10 @@ mod tests {
     fn part_2() {
         let data = fs::read_to_string(INPUT_PATH).unwrap();
         let graph: Graph = data.parse().unwrap();
-        let start = graph.get_start().unwrap();
 
+        fs::write("output/day12.dot", graph.to_dot()).unwrap();
+
+        let start = graph.get_start().unwrap();
         let visited: HashSet<Rc<Node>> = HashSet::new();
         let num_paths = graph._count_paths_part_2(&start, visited, false);
         println!("{}", num_paths);
