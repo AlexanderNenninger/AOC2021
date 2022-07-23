@@ -1,7 +1,6 @@
 #![allow(unused)]
-use std::str::FromStr;
-
 use itertools::Itertools;
+use std::{str::FromStr, usize};
 
 fn to_bits(n: u32) -> Vec<u8> {
     let mut bits = Vec::new();
@@ -50,13 +49,13 @@ fn hex_to_bin(s: &str) -> Result<Vec<u8>, ()> {
 
 #[derive(Debug, Clone, PartialEq)]
 struct LiteralPacket {
-    data: usize,
+    value: usize,
     length: usize,
 }
 
 impl LiteralPacket {
-    fn new(data: usize, length: usize) -> LiteralPacket {
-        LiteralPacket { data, length }
+    fn new(value: usize, length: usize) -> LiteralPacket {
+        LiteralPacket { value, length }
     }
 
     fn from_bits(bits: &[u8]) -> Result<LiteralPacket, ()> {
@@ -83,59 +82,215 @@ impl LiteralPacket {
     fn len(&self) -> usize {
         self.length
     }
-}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LengthTypeId {
-    TotalLength,
-    CountSubpackets,
+    fn eval(&self) -> usize {
+        self.value
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum PacketType {
-    Literal(LiteralPacket),
-    Operator((LengthTypeId, Vec<Packet>)),
+enum OperatorPacket {
+    TotalLength(TotalLengthPacket),
+    CountSubpackets(CountSubpacketsPacket),
 }
 
-impl PacketType {
-    fn literal_from_bits(bits: &[u8]) -> Result<PacketType, ()> {
-        Ok(PacketType::Literal(LiteralPacket::from_bits(bits)?))
-    }
-
-    fn operator_from_bits(bits: &[u8]) -> Result<PacketType, ()> {
+impl OperatorPacket {
+    const BIT_CONSUMPTION: usize = 1;
+    fn from_bits(bits: &[u8]) -> Result<Self, ()> {
         match bits[0] {
-            0 => Self::operator_total_length_from_bits(&bits[1..]),
-            1 => unimplemented!(),
-            _ => return Err(()),
+            0 => Ok(OperatorPacket::TotalLength(TotalLengthPacket::from_bits(
+                &bits[Self::BIT_CONSUMPTION..],
+            )?)),
+            1 => Ok(OperatorPacket::CountSubpackets(
+                CountSubpacketsPacket::from_bits(&bits[Self::BIT_CONSUMPTION..])?,
+            )),
+            _ => Err(()),
         }
     }
 
-    fn operator_total_length_from_bits(bits: &[u8]) -> Result<PacketType, ()> {
-        let length_type_id = LengthTypeId::TotalLength;
-        let total_lenght = from_bits(&bits[0..15]) as usize;
-        let mut data = &bits[15..total_lenght + 15];
+    fn len(&self) -> usize {
+        match self {
+            OperatorPacket::TotalLength(p) => p.len() + Self::BIT_CONSUMPTION,
+            OperatorPacket::CountSubpackets(p) => p.len() + Self::BIT_CONSUMPTION,
+        }
+    }
+
+    fn sum_packet_versions(&self) -> usize {
+        match self {
+            OperatorPacket::TotalLength(p) => p.sum_packet_versions(),
+            OperatorPacket::CountSubpackets(p) => p.sum_packet_versions(),
+        }
+    }
+
+    fn eval(&self) -> Vec<usize> {
+        match self {
+            OperatorPacket::TotalLength(p) => p.eval(),
+            OperatorPacket::CountSubpackets(p) => p.eval(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct CountSubpacketsPacket {
+    count: usize,
+    subpackets: Vec<Packet>,
+}
+
+impl CountSubpacketsPacket {
+    fn new(count: usize, subpackets: Vec<Packet>) -> CountSubpacketsPacket {
+        CountSubpacketsPacket { count, subpackets }
+    }
+
+    fn from_bits(bits: &[u8]) -> Result<CountSubpacketsPacket, ()> {
+        let n_subpackets = from_bits(&bits[..11]) as usize;
+        let mut subpackets = Vec::with_capacity(n_subpackets);
+        let mut data = &bits[11..];
+        for _ in 0..n_subpackets {
+            let packet = Packet::from_bits(data)?;
+            data = &data[packet.len()..];
+            subpackets.push(packet);
+        }
+
+        Ok(CountSubpacketsPacket::new(n_subpackets, subpackets))
+    }
+
+    fn len(&self) -> usize {
+        self.subpackets.iter().map(|p| p.len()).sum::<usize>() + 11
+    }
+
+    fn sum_packet_versions(&self) -> usize {
+        self.subpackets
+            .iter()
+            .map(|p| p.sum_packet_versions())
+            .sum::<usize>()
+    }
+
+    fn eval(&self) -> Vec<usize> {
+        self.subpackets.iter().map(|p| p.eval()).collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct TotalLengthPacket {
+    length: usize,
+    subpackets: Vec<Packet>,
+}
+
+impl TotalLengthPacket {
+    fn new(length: usize, subpackets: Vec<Packet>) -> TotalLengthPacket {
+        TotalLengthPacket { length, subpackets }
+    }
+
+    fn from_bits(bits: &[u8]) -> Result<TotalLengthPacket, ()> {
+        let length = from_bits(&bits[0..15]) as usize;
+        let mut data = &bits[15..length + 15];
         let mut packets = Vec::new();
         while data.len() > 0 {
             let packet = Packet::from_bits(&data)?;
             data = &data[packet.len()..];
             packets.push(packet);
         }
-        Ok(PacketType::Operator((length_type_id, packets)))
+        Ok(TotalLengthPacket::new(length, packets))
     }
 
+    fn len(&self) -> usize {
+        self.length + 15
+    }
+
+    fn sum_packet_versions(&self) -> usize {
+        self.subpackets
+            .iter()
+            .map(|p| p.sum_packet_versions())
+            .sum::<usize>()
+    }
+
+    fn eval(&self) -> Vec<usize> {
+        self.subpackets.iter().map(|p| p.eval()).collect()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum PacketType {
+    Literal(LiteralPacket),
+    Sum(OperatorPacket),
+    Product(OperatorPacket),
+    Minimum(OperatorPacket),
+    Maximum(OperatorPacket),
+    GreaterThan(OperatorPacket),
+    LessThan(OperatorPacket),
+    Equal(OperatorPacket),
+}
+
+impl PacketType {
+    const BIT_CONSUMPTION: usize = 3;
+
     fn from_bits(bits: &[u8]) -> Result<PacketType, ()> {
-        match from_bits(&bits[0..3]) {
-            4 => Self::literal_from_bits(&bits[3..]),
-            _ => Self::operator_from_bits(&bits[3..]),
+        match from_bits(&bits[0..Self::BIT_CONSUMPTION]) {
+            0 => Ok(Self::Sum(OperatorPacket::from_bits(
+                &bits[Self::BIT_CONSUMPTION..],
+            )?)),
+            1 => Ok(Self::Product(OperatorPacket::from_bits(
+                &bits[Self::BIT_CONSUMPTION..],
+            )?)),
+            2 => Ok(Self::Minimum(OperatorPacket::from_bits(
+                &bits[Self::BIT_CONSUMPTION..],
+            )?)),
+            3 => Ok(Self::Maximum(OperatorPacket::from_bits(
+                &bits[Self::BIT_CONSUMPTION..],
+            )?)),
+            4 => Ok(PacketType::Literal(LiteralPacket::from_bits(
+                &bits[Self::BIT_CONSUMPTION..],
+            )?)),
+            5 => Ok(PacketType::GreaterThan(OperatorPacket::from_bits(
+                &bits[Self::BIT_CONSUMPTION..],
+            )?)),
+            6 => Ok(PacketType::LessThan(OperatorPacket::from_bits(
+                &bits[Self::BIT_CONSUMPTION..],
+            )?)),
+            7 => Ok(PacketType::Equal(OperatorPacket::from_bits(
+                &bits[Self::BIT_CONSUMPTION..],
+            )?)),
+
+            _ => Err(()),
         }
     }
 
     fn len(&self) -> usize {
         match self {
-            PacketType::Literal(l) => l.len() + 3,
-            PacketType::Operator((_, packets)) => {
-                packets.iter().map(|p| p.len()).sum::<usize>() + 3
-            }
+            Self::Literal(l) => l.len() + Self::BIT_CONSUMPTION,
+            Self::Sum(o)
+            | Self::Product(o)
+            | Self::Minimum(o)
+            | Self::Maximum(o)
+            | Self::GreaterThan(o)
+            | Self::LessThan(o)
+            | Self::Equal(o) => o.len() + Self::BIT_CONSUMPTION,
+        }
+    }
+
+    fn sum_packet_versions(&self) -> usize {
+        match self {
+            PacketType::Literal(l) => 0,
+            Self::Sum(o)
+            | Self::Product(o)
+            | Self::Minimum(o)
+            | Self::Maximum(o)
+            | Self::GreaterThan(o)
+            | Self::LessThan(o)
+            | Self::Equal(o) => o.sum_packet_versions(),
+        }
+    }
+
+    fn eval(&self) -> usize {
+        match self {
+            PacketType::Literal(l) => l.value,
+            Self::Sum(o) => o.eval().iter().sum::<usize>(),
+            Self::Product(o) => o.eval().iter().product::<usize>(),
+            Self::Minimum(o) => *o.eval().iter().min().unwrap(),
+            Self::Maximum(o) => *o.eval().iter().max().unwrap(),
+            Self::GreaterThan(o) => (o.eval()[0] > o.eval()[1]) as usize,
+            Self::LessThan(o) => (o.eval()[0] < o.eval()[1]) as usize,
+            Self::Equal(o) => (o.eval()[0] == o.eval()[1]) as usize,
         }
     }
 }
@@ -147,6 +302,8 @@ struct Packet {
 }
 
 impl Packet {
+    const BIT_CONSUMPTION: usize = 3;
+
     fn new(version: u8, packet_type: PacketType) -> Self {
         Self {
             version,
@@ -155,13 +312,21 @@ impl Packet {
     }
 
     fn from_bits(bits: &[u8]) -> Result<Self, ()> {
-        let version = from_bits(&bits[0..3]) as u8;
-        let packet_type = PacketType::from_bits(&bits[3..])?;
+        let version = from_bits(&bits[0..Self::BIT_CONSUMPTION]) as u8;
+        let packet_type = PacketType::from_bits(&bits[Self::BIT_CONSUMPTION..])?;
         Ok(Self::new(version, packet_type))
     }
 
     fn len(&self) -> usize {
-        3 + self.packet_type.len()
+        Self::BIT_CONSUMPTION + self.packet_type.len()
+    }
+
+    fn sum_packet_versions(&self) -> usize {
+        self.version as usize + self.packet_type.sum_packet_versions()
+    }
+
+    fn eval(&self) -> usize {
+        self.packet_type.eval()
     }
 }
 
@@ -169,18 +334,17 @@ impl FromStr for Packet {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let bits = hex_to_bin(s)?;
-        let version = from_bits(&bits[0..3]) as u8;
-        let packet_type = PacketType::from_bits(&bits[3..])?;
-        Ok(Packet {
-            version,
-            packet_type,
-        })
+        Self::from_bits(&bits)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::fs::read_to_string;
+
     use super::*;
+
+    const INPUT_FILE: &'static str = "input/day16.txt";
 
     #[test]
     fn test_hex_to_bin() {
@@ -211,7 +375,83 @@ mod tests {
         assert_eq!(packet.version, 1);
         assert_eq!(
             packet.packet_type,
-            PacketType::Operator((LengthTypeId::TotalLength, vec![p1, p2]))
+            PacketType::LessThan(OperatorPacket::TotalLength(TotalLengthPacket::new(
+                27,
+                vec![p1, p2]
+            )))
         );
+    }
+
+    #[test]
+    fn test_operator_packet_count_subpackets_from_str() {
+        let packet = Packet::from_str("EE00D40C823060").unwrap();
+        assert_eq!(packet.version, 7);
+        assert_eq!(
+            packet.packet_type,
+            PacketType::Maximum(OperatorPacket::CountSubpackets(CountSubpacketsPacket::new(
+                3,
+                vec![
+                    Packet::from_bits(&[0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1]).unwrap(),
+                    Packet::from_bits(&[1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0]).unwrap(),
+                    Packet::from_bits(&[0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1]).unwrap(),
+                ]
+            )))
+        );
+    }
+
+    #[test]
+    fn test_packet_version_sum() {
+        let packet = Packet::from_str("8A004A801A8002F478").unwrap();
+        assert_eq!(packet.sum_packet_versions(), 16);
+
+        let packet = Packet::from_str("620080001611562C8802118E34").unwrap();
+        assert_eq!(packet.sum_packet_versions(), 12);
+
+        let packet = Packet::from_str("C0015000016115A2E0802F182340").unwrap();
+        assert_eq!(packet.sum_packet_versions(), 23);
+
+        let packet = Packet::from_str("A0016C880162017C3686B18A3D4780").unwrap();
+        assert_eq!(packet.sum_packet_versions(), 31);
+    }
+
+    #[test]
+    fn part_1() {
+        let input = read_to_string(INPUT_FILE).unwrap();
+        let packet = Packet::from_str(&input).unwrap();
+        println!("Part 1: {}", packet.sum_packet_versions());
+    }
+
+    #[test]
+    fn test_part_2() {
+        let packet = Packet::from_str("C200B40A82").unwrap();
+        assert_eq!(packet.eval(), 3);
+
+        let packet = Packet::from_str("04005AC33890").unwrap();
+        assert_eq!(packet.eval(), 54);
+
+        let packet = Packet::from_str("880086C3E88112").unwrap();
+        assert_eq!(packet.eval(), 7);
+
+        let packet = Packet::from_str("CE00C43D881120").unwrap();
+        assert_eq!(packet.eval(), 9);
+
+        let packet = Packet::from_str("D8005AC2A8F0").unwrap();
+        assert_eq!(packet.eval(), 1);
+
+        let packet = Packet::from_str("F600BC2D8F").unwrap();
+        assert_eq!(packet.eval(), 0);
+
+        let packet = Packet::from_str("9C005AC2F8F0").unwrap();
+        assert_eq!(packet.eval(), 0);
+
+        let packet = Packet::from_str("9C0141080250320F1802104A08").unwrap();
+        assert_eq!(packet.eval(), 1);
+    }
+
+    #[test]
+    fn part_2() {
+        let input = read_to_string(INPUT_FILE).unwrap();
+        let packet = Packet::from_str(&input).unwrap();
+        println!("Part 2: {}", packet.eval());
     }
 }
