@@ -10,7 +10,7 @@ fn all_true(arr: &Vec<Vec<bool>>) -> bool {
 }
 
 fn mat_argmin<T: Ord>(arr: &Vec<Vec<T>>, mask: &Vec<Vec<bool>>) -> Option<Index2D> {
-    if arr.len() == 0 {
+    if arr.is_empty() {
         return None;
     }
     let mut min_val: Option<&T> = None;
@@ -136,7 +136,7 @@ impl fmt::Display for Cavern {
             for c in row {
                 write!(f, "{: <3}", c)?;
             }
-            write!(f, "\n")?;
+            writeln!(f)?;
         }
         Ok(())
     }

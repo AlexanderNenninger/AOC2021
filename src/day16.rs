@@ -185,8 +185,8 @@ impl TotalLengthPacket {
         let length = from_bits(&bits[0..15]) as usize;
         let mut data = &bits[15..length + 15];
         let mut packets = Vec::new();
-        while data.len() > 0 {
-            let packet = Packet::from_bits(&data)?;
+        while !data.is_empty() {
+            let packet = Packet::from_bits(data)?;
             data = &data[packet.len()..];
             packets.push(packet);
         }
@@ -344,7 +344,7 @@ mod tests {
 
     use super::*;
 
-    const INPUT_FILE: &'static str = "input/day16.txt";
+    const INPUT_FILE: &str = "input/day16.txt";
 
     #[test]
     fn test_hex_to_bin() {

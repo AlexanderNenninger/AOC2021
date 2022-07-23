@@ -76,7 +76,7 @@ impl Edge {
 impl FromStr for Edge {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split("-");
+        let mut parts = s.split('-');
 
         let fst = parts.next().ok_or(())?;
         let snd = parts.next().ok_or(())?;
@@ -131,10 +131,7 @@ impl Graph {
 
     fn get_start(&self) -> Option<Rc<Node>> {
         self.nodes()
-            .iter()
-            .filter(|&node| node.type_ == NodeType::Start)
-            .next()
-            .and_then(|s| Some(s.clone()))
+            .iter().find(|&node| node.type_ == NodeType::Start).cloned()
     }
 
     fn _count_paths_part_1(&self, node: &Rc<Node>, mut visited: HashSet<Rc<Node>>) -> usize {
@@ -153,7 +150,7 @@ impl Graph {
                 num_paths += self._count_paths_part_1(neighbor, visited.clone())
             }
         }
-        return num_paths;
+        num_paths
     }
 
     fn count_paths_part_1(&self) -> Option<usize> {

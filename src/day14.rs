@@ -120,11 +120,12 @@ impl Polymer {
 
 impl Display for Polymer {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        Ok(for (key, val) in self.pairs.iter() {
+        for (key, val) in self.pairs.iter() {
             if *val != 0 {
                 write!(f, "{} -> {}, ", key, val)?;
             }
-        })
+        };
+        Ok(())
     }
 }
 

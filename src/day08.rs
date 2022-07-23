@@ -43,7 +43,7 @@ impl Digit {
                 return Ok(Digit(i as u8));
             }
         }
-        return Err(());
+        Err(())
     }
 }
 
@@ -62,7 +62,7 @@ impl str::FromStr for Digit {
         }
 
         for c in s.chars() {
-            if (c as u8) < ('a' as u8) || (c as u8) > ('g' as u8) {
+            if (c as u8) < b'a' || (c as u8) > b'g' {
                 return Err(());
             }
         }
@@ -87,7 +87,7 @@ impl Display {
     fn count_parsed_output(&self) -> usize {
         let mut acc: usize = 0;
         for maybe_d in self.output.iter() {
-            if let Some(_) = maybe_d {
+            if maybe_d.is_some() {
                 acc += 1;
             }
         }

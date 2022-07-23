@@ -96,7 +96,7 @@ impl Display for Energies {
             for elem in row.iter() {
                 write!(f, "{: >2}", elem)?;
             }
-            write!(f, "\n")?;
+            writeln!(f)?;
         }
         Ok(())
     }
