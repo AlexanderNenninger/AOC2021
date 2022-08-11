@@ -63,8 +63,8 @@ impl Problem {
     }
 
     /// Count the least common bit in each column.
-    fn least_common_bit(&self) -> Vec<u8> {
-        let most_common = self.most_common_value(0);
+    fn least_common_bit(&self, on_tie: u8) -> Vec<u8> {
+        let most_common = self.most_common_value(on_tie);
         most_common.iter().map(|&b| 1 - b).collect()
     }
 
@@ -73,7 +73,7 @@ impl Problem {
     }
 
     fn epsilon_rate(&self) -> usize {
-        to_uint(self.least_common_bit())
+        to_uint(self.least_common_bit(0))
     }
 
     fn solve_part_1(&self) -> usize {
