@@ -1,100 +1,153 @@
 #![allow(dead_code)]
-use std::{fmt::Display, str::FromStr};
 
-struct Energies([[u32; 10]; 10]);
+use self::Direction::*;
+use std::{error::Error, fmt::Display, str::FromStr};
 
-impl Energies {
-    /// Assign add other to each element of self.
-    fn add_u32(&mut self, other: u32) {
-        for row in self.0.iter_mut() {
-            for elem in row.iter_mut() {
-                *elem += other;
-            }
+macro_rules! skip_none {
+    ($res:expr) => {
+        match $res {
+            Some(val) => val,
+            None => continue,
         }
-    }
+    };
+}
 
-    /// Return a mask indicating which elements of self are greater than 9.
-    fn flash(&self) -> [[bool; 10]; 10] {
-        let mut mask = [[false; 10]; 10];
-        for (i, row) in self.0.iter().enumerate() {
-            for (j, elem) in row.iter().enumerate() {
-                if *elem > 9 {
-                    mask[i][j] = true;
-                }
-            }
-        }
-        mask
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+    UpLeft,
+    UpRight,
+    DownLeft,
+    DownRight,
+}
 
-    /// Increase all elements, whose neighbor has flashed by 1.
-    fn sense_flash(&mut self, mask: &[[bool; 10]; 10]) {
-        for (i, row) in self.0.iter_mut().enumerate() {
-            for (j, elem) in row.iter_mut().enumerate() {
-                if mask[i][j] {
-                    if i > 0 && mask[i - 1][j] {
-                        *elem += 1;
-                    }
-
-                    if i < 9 && mask[i + 1][j] {
-                        *elem += 1;
-                    }
-
-                    if j > 0 && mask[i][j - 1] {
-                        *elem += 1;
-                    }
-
-                    if j < 9 && mask[i][j + 1] {
-                        *elem += 1;
-                    }
-
-                    if i > 0 && j > 0 && mask[i - 1][j - 1] {
-                        *elem += 1;
-                    }
-
-                    if i > 0 && j < 9 && mask[i - 1][j + 1] {
-                        *elem += 1;
-                    }
-
-                    if i < 9 && j > 0 && mask[i + 1][j - 1] {
-                        *elem += 1;
-                    }
-
-                    if i < 9 && j < 9 && mask[i + 1][j + 1] {
-                        *elem += 1;
-                    }
-                }
-            }
-        }
-    }
-
-    fn step(&mut self) {
-        self.add_u32(1);
-        let mask = self.flash();
-        self.sense_flash(&mask);
+impl Direction {
+    pub fn iterator() -> impl Iterator<Item = Direction> {
+        [Up, UpRight, Right, DownRight, Down, DownLeft, Left, UpLeft]
+            .iter()
+            .copied()
     }
 }
 
-impl FromStr for Energies {
-    type Err = ();
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Grid<const SIZE: usize> {
+    data: [[u8; SIZE]; SIZE],
+    flashed: [[bool; SIZE]; SIZE],
+}
+
+impl<const SIZE: usize> Grid<SIZE> {
+    fn new(data: [[u8; SIZE]; SIZE]) -> Self {
+        let flashed = [[false; SIZE]; SIZE];
+        Self { data, flashed }
+    }
+
+    fn increase(&mut self) {
+        for row in self.data.iter_mut() {
+            for cell in row.iter_mut() {
+                *cell += 1;
+            }
+        }
+    }
+
+    fn get_neighbor(&mut self, i: usize, j: usize, direction: Direction) -> Option<(usize, usize)> {
+        let i = i as isize;
+        let j = j as isize;
+        let (i, j) = match direction {
+            Direction::Up => (i - 1, j),
+            Direction::Down => (i + 1, j),
+            Direction::Left => (i, j - 1),
+            Direction::Right => (i, j + 1),
+            Direction::UpLeft => (i - 1, j - 1),
+            Direction::UpRight => (i - 1, j + 1),
+            Direction::DownLeft => (i + 1, j - 1),
+            Direction::DownRight => (i + 1, j + 1),
+        };
+        if i < 0 || j < 0 || i >= SIZE as isize || j >= SIZE as isize {
+            return None;
+        }
+        Some((i as usize, j as usize))
+    }
+
+    fn flash_one(&mut self, i: usize, j: usize) {
+        let flashed = &mut self.flashed[i][j];
+        if self.data[i][j] > 9 && !*flashed {
+            *flashed = true;
+            for direction in Direction::iterator() {
+                let (neighbor_i, neighbor_j) = skip_none!(self.get_neighbor(i, j, direction));
+                self.data[neighbor_i][neighbor_j] += 1;
+                self.flash_one(neighbor_i, neighbor_j);
+            }
+        }
+    }
+
+    fn flash(&mut self) {
+        for i in 0..SIZE {
+            for j in 0..SIZE {
+                self.flash_one(i, j);
+            }
+        }
+    }
+
+    fn reset(&mut self) -> usize {
+        let mut count = 0;
+        for i in 0..SIZE {
+            for j in 0..SIZE {
+                let cell = &mut self.data[i][j];
+                if *cell > 9 {
+                    count += 1;
+                    *cell = 0;
+                }
+
+                self.flashed[i][j] = false;
+            }
+        }
+        count
+    }
+
+    fn step(&mut self) -> usize {
+        self.increase();
+        self.flash();
+        self.reset()
+    }
+
+    fn all_equal(&self) -> bool {
+        for row in self.data.iter() {
+            for cell in row.iter() {
+                if *cell != self.data[0][0] {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+}
+
+impl<const SIZE: usize> FromStr for Grid<SIZE> {
+    type Err = Box<dyn Error>;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut octos = Energies([[0; 10]; 10]);
-        let s = s.trim();
-
-        for (y, line) in s.lines().enumerate() {
-            let line = line.trim();
-            for (x, c) in line.chars().enumerate() {
-                octos.0[y][x] = c.to_digit(10).ok_or(())?;
+        let mut data = [[0; SIZE]; SIZE];
+        for (i, line) in s.lines().enumerate() {
+            for (j, c) in line.chars().enumerate() {
+                let entry = data
+                    .get_mut(i)
+                    .ok_or("Row out of bounds".to_string())?
+                    .get_mut(j)
+                    .ok_or("Coumn out of bounds".to_string())?;
+                *entry = c.to_digit(10).ok_or("Non-digit character.".to_string())? as u8;
             }
         }
-        Ok(octos)
+        Ok(Self::new(data))
     }
 }
 
-impl Display for Energies {
+impl<const SIZE: usize> Display for Grid<SIZE> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        for row in self.0.iter() {
-            for elem in row.iter() {
-                write!(f, "{: >2}", elem)?;
+        for row in self.data.iter() {
+            for cell in row.iter() {
+                write!(f, "{}", cell)?;
             }
             writeln!(f)?;
         }
@@ -102,100 +155,90 @@ impl Display for Energies {
     }
 }
 
+pub fn part_1() -> usize {
+    const INPUT_FILE: &str = "input/day11.txt";
+    let data = std::fs::read_to_string(INPUT_FILE).expect("Failed to read input file.");
+    let mut grid: Grid<10> = Grid::from_str(&data).expect("Failed to parse input file.");
+    let mut count = 0;
+    for _ in 0..100 {
+        count += grid.step();
+    }
+    count
+}
+
+pub fn part_2() -> usize {
+    const INPUT_FILE: &str = "input/day11.txt";
+    let data = std::fs::read_to_string(INPUT_FILE).expect("Failed to read input file.");
+    let mut grid: Grid<10> = Grid::from_str(&data).expect("Failed to parse input file.");
+    let mut i = 0;
+    loop {
+        grid.step();
+        i += 1;
+        if grid.all_equal() {
+            return i;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::{fs, io::Write};
+
     use super::*;
-    use std::fs::read_to_string;
-    const INPUT_TEST: &str = "input/day11_test.txt";
+
+    const TEST_INPUT_FILE: &str = "input/day11_test.txt";
+    const TEST_GRID: Grid<5> = Grid {
+        data: [
+            [1, 1, 1, 1, 1],
+            [1, 9, 9, 9, 1],
+            [1, 9, 1, 9, 1],
+            [1, 9, 9, 9, 1],
+            [1, 1, 1, 1, 1],
+        ],
+        flashed: [[false; 5]; 5],
+    };
 
     #[test]
     fn test_from_str() {
-        let input = "
-            11111
-            19991
-            19191
-            19991
-            11111
-        ";
-        let energies = Energies::from_str(input).unwrap();
-        assert_eq!(energies.0[0][0], 1);
-        assert_eq!(energies.0[0][1], 1);
-        assert_eq!(energies.0[0][2], 1);
-        assert_eq!(energies.0[0][3], 1);
-        assert_eq!(energies.0[0][4], 1);
-
-        assert_eq!(energies.0[1][0], 1);
-        assert_eq!(energies.0[1][1], 9);
-        assert_eq!(energies.0[1][2], 9);
-        assert_eq!(energies.0[1][3], 9);
-        assert_eq!(energies.0[1][4], 1);
-    }
-
-    #[test]
-    fn test_add_u32() {
-        let mut energies = Energies([[0; 10]; 10]);
-        energies.add_u32(1);
-        assert_eq!(energies.0[0][0], 1);
-        assert_eq!(energies.0[0][1], 1);
-        assert_eq!(energies.0[0][2], 1);
-        assert_eq!(energies.0[0][3], 1);
-        assert_eq!(energies.0[0][4], 1);
+        let data = "11111\n19991\n19191\n19991\n11111";
+        let grid: Grid<5> = Grid::from_str(data).unwrap();
+        assert_eq!(grid.data, TEST_GRID.data);
     }
 
     #[test]
     fn test_flash() {
-        let mut energies = Energies([[0; 10]; 10]);
-        energies.0[0][0] = 1;
-        energies.0[0][1] = 1;
-        energies.0[0][2] = 1;
-        energies.0[0][3] = 1;
-        energies.0[0][4] = 1;
-
-        energies.0[1][0] = 1;
-        energies.0[1][1] = 10;
-        energies.0[1][2] = 10;
-        energies.0[1][3] = 10;
-        energies.0[1][4] = 1;
-
-        let mask = energies.flash();
-        assert_eq!(mask[0][0], false);
-        assert_eq!(mask[0][1], false);
-        assert_eq!(mask[0][2], false);
-        assert_eq!(mask[0][3], false);
-        assert_eq!(mask[0][4], false);
-
-        assert_eq!(mask[1][0], false);
-        assert_eq!(mask[1][1], true);
-        assert_eq!(mask[1][2], true);
-        assert_eq!(mask[1][3], true);
-        assert_eq!(mask[1][4], false);
+        let mut grid = TEST_GRID.clone();
+        grid.increase();
+        grid.flash();
+        grid.reset();
+        let expected = Grid {
+            data: [
+                [3, 4, 5, 4, 3],
+                [4, 0, 0, 0, 4],
+                [5, 0, 0, 0, 5],
+                [4, 0, 0, 0, 4],
+                [3, 4, 5, 4, 3],
+            ],
+            flashed: [[false; 5]; 5],
+        };
+        assert_eq!(grid.data, expected.data);
     }
 
     #[test]
-    fn test_step() {
-        let input = read_to_string(INPUT_TEST).unwrap();
-        let mut energies = Energies::from_str(&input).unwrap();
+    fn test_large_grid() {
+        let data = fs::read_to_string(TEST_INPUT_FILE).unwrap();
+        let mut grid: Grid<10> = Grid::from_str(&data).unwrap();
 
-        println!("{}", energies);
+        let f_out = fs::File::create("output/day11_test.txt").unwrap();
+        let mut f_out = std::io::BufWriter::new(f_out);
 
-        energies.add_u32(2);
+        writeln!(f_out, "Before any steps:\n{}", grid).unwrap();
 
-        println!("{}", energies);
-
-        let mask = energies.flash();
-        energies.sense_flash(&mask);
-
-        println!("{}", energies);
-    }
-
-    /// Test 100 Steps
-    #[test]
-    fn test_example() {
-        let input = read_to_string(INPUT_TEST).unwrap();
-        let mut energies = Energies::from_str(&input).unwrap();
-        for _ in 0..100 {
-            energies.step();
+        let mut count = 0;
+        for i in 1..=100 {
+            count += grid.step();
+            writeln!(f_out, "After step {}:\n{}", i, grid).unwrap();
         }
-        
+        assert_eq!(count, 1656);
     }
 }
