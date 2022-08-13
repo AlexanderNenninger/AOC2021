@@ -1,9 +1,9 @@
 graph {
-	A -- b
 	A -- end
-	A -- c
-	start -- A
+	A -- b
 	b -- d
-	start -- b
 	b -- end
+	start -- A
+	start -- b
+	A -- c
 }
