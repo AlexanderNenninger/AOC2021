@@ -1,19 +1,22 @@
 [package]
-name = "aoc_2021"
-version = "0.1.0"
-edition = "2018"
+    edition="2018"
+    name   ="aoc_2021"
+    version="0.1.0"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+    # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-arraymap = "0.1.1"
-regex = "1.6.0"
-crossterm = "0.23.0"
-itertools = "0.10.3"
-lazy_static = "1.4.0"
+    arraymap   ="0.1.1"
+    crossterm  ="0.23.0"
+    itertools  ="0.10.3"
+    lazy_static="1.4.0"
+    regex      ="1.6.0"
 
 [profile.release]
-debug = true
+    debug=true
 
 [profile.test]
-# opt-level = 3
+    # opt-level = 3
+
+[profile.bench]
+    debug=true
