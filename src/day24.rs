@@ -228,7 +228,7 @@ impl Program {
         let instructions = self
             .instructions
             .into_iter()
-            .filter(|instruction| instruction.is_identity())
+            .filter(|instruction| !instruction.is_identity())
             .collect();
         Program::new(instructions)
     }
