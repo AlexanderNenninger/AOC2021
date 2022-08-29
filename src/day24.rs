@@ -83,7 +83,6 @@ enum Instruction {
     Div(usize, Value),
     Mod(usize, Value),
     Eql(usize, Value),
-    NoOp,
 }
 
 impl Instruction {
@@ -100,7 +99,6 @@ impl Instruction {
             &Div(idx, v) => Self::div(idx, v, memory),
             &Mod(idx, v) => Self::modulo(idx, v, memory),
             &Eql(idx, v) => Self::eql(idx, v, memory),
-            &NoOp => Ok(()),
         }
     }
 
@@ -157,12 +155,11 @@ impl Instruction {
     fn is_identity(&self) -> bool {
         match self {
             &Inp(v) => v == 0,
-            &Add(idx, v) => v.equals_i64(0),
-            &Mul(idx, v) => v.equals_i64(1),
-            &Div(idx, v) => v.equals_i64(1),
-            &Mod(idx, v) => false,
-            &Eql(idx, v) => false,
-            &NoOp => true,
+            &Add(_, v) => v.equals_i64(0),
+            &Mul(_, v) => v.equals_i64(1),
+            &Div(_, v) => v.equals_i64(1),
+            &Mod(_, _) => false,
+            &Eql(_, _) => false,
         }
     }
 }
