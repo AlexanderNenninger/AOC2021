@@ -1,17 +1,21 @@
 use std::{
     error::{self, Error},
-    fmt, fs,
+    fmt::{self, Display},
+    fs,
+    num::ParseIntError,
     str::FromStr,
+    sync::atomic::{AtomicU64, Ordering},
 };
 use Instruction::*;
 use Value::*;
+use Variable::*;
 
-fn num_to_digits(mut num: i64) -> [i64; 14] {
+fn num_to_digits(mut num: i64) -> [Variable; 14] {
     let mut rem;
-    let mut digits = [0; 14];
+    let mut digits = [Init(0); 14];
     for i in 0..14 {
         (num, rem) = (num / 10, num % 10);
-        digits[i] = rem;
+        digits[i] = Init(rem);
     }
     digits
 }
@@ -75,6 +79,15 @@ impl FromStr for Value {
     }
 }
 
+impl Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            &Literal(x) => write!(f, "{}", x),
+            &Index(x) => write!(f, "{}", string_from_idx(x)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 enum Instruction {
     Inp(usize),
@@ -88,8 +101,8 @@ enum Instruction {
 impl Instruction {
     fn eval(
         &self,
-        memory: &mut [i64; 4],
-        input: &[i64],
+        memory: &mut [Variable; 4],
+        input: &[Variable],
         input_ptr: &mut usize,
     ) -> Result<(), EvalError> {
         match self {
@@ -104,57 +117,57 @@ impl Instruction {
 
     fn input(
         idx: usize,
-        memory: &mut [i64; 4],
-        input: &[i64],
+        memory: &mut [Variable; 4],
+        input: &[Variable],
         input_ptr: &mut usize,
     ) -> Result<(), EvalError> {
         memory[idx] = input[*input_ptr];
         Ok(())
     }
 
-    fn add(idx: usize, v: Value, memory: &mut [i64; 4]) -> Result<(), EvalError> {
+    fn add(idx: usize, v: Value, memory: &mut [Variable; 4]) -> Result<(), EvalError> {
         match v {
-            Index(idy) => memory[idx] += memory[idy],
-            Literal(v) => memory[idx] += v,
+            Index(idy) => memory[idx] = memory[idx] + memory[idy],
+            Literal(v) => memory[idx] = memory[idx] + Init(v),
         };
         return Ok(());
     }
 
-    fn mul(idx: usize, v: Value, memory: &mut [i64; 4]) -> Result<(), EvalError> {
+    fn mul(idx: usize, v: Value, memory: &mut [Variable; 4]) -> Result<(), EvalError> {
         match v {
-            Index(idy) => memory[idx] *= memory[idy],
-            Literal(v) => memory[idx] *= v,
+            Index(idy) => memory[idx] = memory[idx] * memory[idy],
+            Literal(v) => memory[idx] = memory[idx] * Init(v),
         };
         return Ok(());
     }
 
-    fn div(idx: usize, v: Value, memory: &mut [i64; 4]) -> Result<(), EvalError> {
+    fn div(idx: usize, v: Value, memory: &mut [Variable; 4]) -> Result<(), EvalError> {
         match v {
-            Index(idy) => memory[idx] /= memory[idy],
-            Literal(v) => memory[idx] /= v,
+            Index(idy) => memory[idx] = memory[idx] / memory[idy],
+            Literal(v) => memory[idx] = memory[idx] / Init(v),
         };
         return Ok(());
     }
 
-    fn modulo(idx: usize, v: Value, memory: &mut [i64; 4]) -> Result<(), EvalError> {
+    fn modulo(idx: usize, v: Value, memory: &mut [Variable; 4]) -> Result<(), EvalError> {
         match v {
-            Index(idy) => memory[idx] %= memory[idy],
-            Literal(v) => memory[idx] %= v,
+            Index(idy) => memory[idx] = memory[idx] % memory[idy],
+            Literal(v) => memory[idx] = memory[idx] % Init(v),
         };
         return Ok(());
     }
 
-    fn eql(idx: usize, v: Value, memory: &mut [i64; 4]) -> Result<(), EvalError> {
+    fn eql(idx: usize, v: Value, memory: &mut [Variable; 4]) -> Result<(), EvalError> {
         match v {
-            Index(idy) => memory[idx] = (memory[idx] == memory[idy]) as i64,
-            Literal(v) => memory[idx] = (memory[idx] == v) as i64,
+            Index(idy) => memory[idx] = Init((memory[idx] == memory[idy]) as i64),
+            Literal(v) => memory[idx] = Init((memory[idx] == Init(v)) as i64),
         };
         return Ok(());
     }
 
     fn is_identity(&self) -> bool {
         match self {
-            &Inp(v) => v == 0,
+            &Inp(_) => false,
             &Add(_, v) => v.equals_i64(0),
             &Mul(_, v) => v.equals_i64(1),
             &Div(_, v) => v.equals_i64(1),
@@ -176,6 +189,16 @@ fn idx_from_option_str(s: Option<&str>) -> Result<usize, Box<dyn Error>> {
     }
 
     Err(Box::new(ParseError("Could not parse usize.")))
+}
+
+fn string_from_idx(i: usize) -> &'static str {
+    match i {
+        0 => "w",
+        1 => "x",
+        2 => "y",
+        3 => "z",
+        _ => "",
+    }
 }
 
 impl FromStr for Instruction {
@@ -212,6 +235,19 @@ impl FromStr for Instruction {
     }
 }
 
+impl Display for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            &Inp(a) => write!(f, "inp {}", string_from_idx(a)),
+            &Add(a, b) => write!(f, "add {} {}", string_from_idx(a), b),
+            &Mul(a, b) => write!(f, "mul {} {}", string_from_idx(a), b),
+            &Div(a, b) => write!(f, "div {} {}", string_from_idx(a), b),
+            &Mod(a, b) => write!(f, "mod {} {}", string_from_idx(a), b),
+            &Eql(a, b) => write!(f, "eql {} {}", string_from_idx(a), b),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Program {
     instructions: Vec<Instruction>,
@@ -233,12 +269,13 @@ impl Program {
         Program::new(instructions)
     }
 
-    fn eval(&self, input: &[i64]) -> Result<[i64; 4], EvalError> {
-        let mut memory = [0i64; 4];
+    fn eval(&self, input: &[Variable]) -> Result<[Variable; 4], EvalError> {
+        let mut memory = [Init(0i64); 4];
         let mut input_ptr = 0usize;
 
         for instruction in self.instructions.iter() {
-            instruction.eval(&mut memory, input, &mut input_ptr)?
+            instruction.eval(&mut memory, input, &mut input_ptr)?;
+            println!("{:?}", memory);
         }
         Ok(memory)
     }
@@ -248,11 +285,11 @@ impl Program {
         if !input.len() == 14 {
             return Err(EvalError("Model number has exactly 14 digits."));
         }
-        if input.iter().any(|&i| i == 0) {
+        if input.iter().any(|&i| i == Init(0)) {
             return Ok(false);
         }
         let result = self.eval(&input)?;
-        Ok(result[3] == 0)
+        Ok(result[3] == Init(0))
     }
 }
 
@@ -265,6 +302,102 @@ impl FromStr for Program {
             instructions.push(line.trim().parse::<Instruction>()?)
         }
         Ok(Program::new(instructions))
+    }
+}
+
+impl Display for Program {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for instruction in self.instructions.iter() {
+            writeln!(f, "{}", instruction)?;
+        }
+        Ok(())
+    }
+}
+
+static VARIABLE_ID: AtomicU64 = AtomicU64::new(0);
+fn get_id() -> u64 {
+    VARIABLE_ID.fetch_add(1, Ordering::Relaxed)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum Variable {
+    Init(i64),
+    Uninit(u64),
+}
+
+impl std::ops::Add for Variable {
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Init(i), Init(j)) => Init(i + j),
+            (Init(0), Uninit(i)) => Uninit(i),
+            (Uninit(i), Init(0)) => Uninit(i),
+            _ => Uninit(get_id()),
+        }
+    }
+}
+impl std::ops::Mul for Variable {
+    type Output = Self;
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Init(0), Uninit(_)) => Init(0),
+            (Uninit(_), Init(0)) => Init(0),
+            (Init(i), Init(j)) => Init(i * j),
+            (Uninit(id), Init(1)) => Uninit(id),
+            (Init(1), Uninit(id)) => Uninit(id),
+            _ => Uninit(get_id()),
+        }
+    }
+}
+impl std::ops::Div for Variable {
+    type Output = Self;
+    fn div(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Init(i), Init(j)) => Init(i / j),
+            (Uninit(i), Uninit(j)) => {
+                if i == j {
+                    Init(1)
+                } else {
+                    Uninit(get_id())
+                }
+            }
+            _ => Uninit(get_id()),
+        }
+    }
+}
+impl std::ops::Rem for Variable {
+    type Output = Self;
+    fn rem(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Init(i), Init(j)) => Init(i % j),
+            _ => Uninit(get_id()),
+        }
+    }
+}
+impl PartialEq for Variable {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Init(l0), Self::Init(r0)) => l0 == r0,
+            (Uninit(i), Uninit(j)) => i == j,
+            _ => false,
+        }
+    }
+}
+impl Eq for Variable {}
+
+impl FromStr for Variable {
+    type Err = ParseIntError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Init(s.parse::<i64>()?))
+    }
+}
+
+impl Display for Variable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Init(x) => write!(f, "{}", x),
+            Uninit(x) => write!(f, "x_{}", x),
+        }
     }
 }
 
@@ -300,10 +433,10 @@ mod tests {
         const INPUT: &str = "inp x\nmul x -1";
         let program = Program::from_str(INPUT).unwrap();
 
-        let input = vec![1i64];
+        let input = vec![Init(1i64)];
         let result = program.eval(&input).unwrap();
 
-        assert_eq!(result[1], -1);
+        assert_eq!(result[1], Init(-1));
     }
 
     #[test]
@@ -323,10 +456,10 @@ mod tests {
         ";
         let program = Program::from_str(INPUT.trim()).unwrap();
 
-        let input = vec![14i64];
+        let input = vec![Init(14i64)];
         let result = program.eval(&input).unwrap();
 
-        assert_eq!(result, [1, 1, 1, 0]);
+        assert_eq!(result, [Init(1), Init(1), Init(1), Init(0)]);
     }
 
     #[test]
@@ -339,7 +472,7 @@ mod tests {
         let program = program.optimize();
         println!("Optimized: {}", program.instructions.len());
 
-        println!("{:?}", program);
+        println!("{}", program);
     }
 
     #[test]
@@ -349,5 +482,14 @@ mod tests {
         let model_number = 13579246899999;
         let res = program.check_model_number(model_number).unwrap();
         assert_eq!(res, false);
+    }
+
+    #[test]
+    fn test_model_uninit() {
+        let data = fs::read_to_string(INPUT_FILE).unwrap();
+        let program = Program::from_str(&data).unwrap().optimize();
+        let input = [Uninit(get_id()); 14];
+        let res = program.eval(&input).unwrap();
+        print!("{:?}", res);
     }
 }
